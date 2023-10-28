@@ -24,9 +24,40 @@ from fastchat.serve.model_worker import (
     worker_id,
 )
 from fastchat.utils import get_context_length
+import uuid
 
 
 app = FastAPI()
+
+def get_last_query(context):
+    lines = context.strip().split("\n")
+    if lines and "Human:" in lines[-1]:
+        return lines[-1].split("Human:")[-1].strip()
+    return ""
+
+async def classify_context(context, sampling_params, request_id):
+    # Create a specific prompt for classification
+    classification_prompt = ("<s>[INST]You just received the text below. Focus on the last prompt. If this is simple answer it directly. "
+                             "However, if it contains a question that could be answered best by an expert on yoga, answer it only with the word in all caps \"YOGA\" "
+                             "and then the shortest way to ask the users question [/INST]<s> \n \n" + context)
+    
+    request_id = str(uuid.uuid4())
+    s_params = sampling_params
+    #s_params.max_tokens = 30
+    s_params.temperature = 0.1
+    intent = ""
+    async for response_object in engine.generate(classification_prompt, s_params, request_id):
+        # Append the generated text to the intent
+        intent += response_object.outputs[0].text.strip()
+        
+        # Stop condition: Either when "YOGA" is detected or when the generator exhausts
+        if "YOGA" in intent:
+            break
+
+    confidence = 1  # Defaulting to maximum confidence. Adjust this if necessary.
+    print("THE RESULTS ARE IN!!!!!" + intent)
+    return intent, confidence
+
 
 
 class VLLMWorker(BaseModelWorker):
@@ -61,10 +92,17 @@ class VLLMWorker(BaseModelWorker):
         if not no_register:
             self.init_heart_beat()
 
+        
+
     async def generate_stream(self, params):
         self.call_ct += 1
 
         context = params.pop("prompt")
+        print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@22 WOOOOOOOOOOTTTTTT")
+        print("CONTEXT: " + context)
+        print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@22 WOOOOOOOOOOTTTTTT")
+        
+        #context = context + " - Also speak your answer like a cat would speak! Don't break role. You are a cat!"
         request_id = params.pop("request_id")
         temperature = float(params.get("temperature", 1.0))
         top_p = float(params.get("top_p", 1.0))
@@ -76,7 +114,7 @@ class VLLMWorker(BaseModelWorker):
         echo = params.get("echo", True)
         use_beam_search = params.get("use_beam_search", False)
         best_of = params.get("best_of", None)
-
+           
         # Handle stop_str
         stop = set()
         if isinstance(stop_str, str) and stop_str != "":
@@ -101,6 +139,22 @@ class VLLMWorker(BaseModelWorker):
             max_tokens=max_new_tokens,
             best_of=best_of,
         )
+        
+        
+        intent, confidence = await classify_context(context, sampling_params, request_id)
+        YOUR_THRESHOLD = 0.8
+        if confidence >= YOUR_THRESHOLD:
+           if "YOGA" in intent:
+             print("YOGGGGGGAAAAA!!! I KNOW YOGA")
+             context = context + "ADD THE WORDS MOOOOOOOOOSEEEEE MOSOSSEEOEEEE TO THE ANSWER!!!"
+           elif intent == "MEDICAL":
+            print("MEDICINE!!!! I KNOW MEDICINE!!")
+        # ... handle other categories
+           else:
+            pass
+        # if confidence < YOUR_THRESHOLD:
+            # Ask for clarification
+        print("0000000000000000")
         results_generator = engine.generate(context, sampling_params, request_id)
 
         async for request_output in results_generator:

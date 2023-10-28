@@ -319,20 +319,17 @@ register_conv_template(
         messages=(
             (
                 "Human",
-                "Got any creative ideas for a 10 year old’s birthday?",
+                "Can you help me to understand integrative health better?",
             ),
             (
                 "Assistant",
-                """Of course! Here are some creative ideas for a 10-year-old's birthday party:
-1. Treasure Hunt: Organize a treasure hunt in your backyard or nearby park. Create clues and riddles for the kids to solve, leading them to hidden treasures and surprises.
-2. Science Party: Plan a science-themed party where kids can engage in fun and interactive experiments. You can set up different stations with activities like making slime, erupting volcanoes, or creating simple chemical reactions.
-3. Outdoor Movie Night: Set up a backyard movie night with a projector and a large screen or white sheet. Create a cozy seating area with blankets and pillows, and serve popcorn and snacks while the kids enjoy a favorite movie under the stars.
-4. DIY Crafts Party: Arrange a craft party where kids can unleash their creativity. Provide a variety of craft supplies like beads, paints, and fabrics, and let them create their own unique masterpieces to take home as party favors.
-5. Sports Olympics: Host a mini Olympics event with various sports and games. Set up different stations for activities like sack races, relay races, basketball shooting, and obstacle courses. Give out medals or certificates to the participants.
-6. Cooking Party: Have a cooking-themed party where the kids can prepare their own mini pizzas, cupcakes, or cookies. Provide toppings, frosting, and decorating supplies, and let them get hands-on in the kitchen.
-7. Superhero Training Camp: Create a superhero-themed party where the kids can engage in fun training activities. Set up an obstacle course, have them design their own superhero capes or masks, and organize superhero-themed games and challenges.
-8. Outdoor Adventure: Plan an outdoor adventure party at a local park or nature reserve. Arrange activities like hiking, nature scavenger hunts, or a picnic with games. Encourage exploration and appreciation for the outdoors.
-Remember to tailor the activities to the birthday child's interests and preferences. Have a great celebration!""",
+                """Of course! Here are some starting points:
+1. Familiarize yourself with the main viewpoints of allopathic medicine (western medicine) and alternative medicines
+2. Learn more about the perception of the human being as an open versus a closed system. 
+3. Engange with organizations like the GYTA (Global Yoga Therapy and Ayurveda) of India
+4. Research platforms like Pubmed to get an idea about the extensive research being done in alternative medicine
+5. Take short courses in Ayurveda or Yoga Therapy
+Remember to tailor the activities to your interests and preferences. You can always ask the Plumeria system for more advice!""",
             ),
         ),
         offset=2,
@@ -525,24 +522,21 @@ register_conv_template(
     )
 )
 
-# RWKV-4-Raven default template
-register_conv_template(
-    Conversation(
-        name="rwkv",
-        roles=("Bob", "Alice"),
-        messages=(
-            ("Bob", "hi"),
-            (
-                "Alice",
-                "Hi. I am your assistant and I will provide expert full response in full details. Please feel free to ask any question and I will always answer it.",
-            ),
-        ),
-        offset=2,
-        sep_style=SeparatorStyle.RWKV,
-        sep="",
-        stop_str="\n\n",
-    )
-)
+# # RWKV-4-Raven default template
+# register_conv_template(
+#     Conversation(
+#         name="rwkv",
+#         roles=("Bob", "Alice"),
+#         messages=(
+#             ("Bob", "hi"),birthdayll response in full details. Please feel free to ask any question and I will always answer it.",
+#             ),
+#         ),
+#         offset=2,
+#         sep_style=SeparatorStyle.RWKV,
+#         sep="",
+#         stop_str="\n\n",
+#     )
+# )
 
 # Buddy default template
 register_conv_template(
@@ -887,6 +881,16 @@ register_conv_template(
 register_conv_template(
     Conversation(
         name="llama-2",
+        system_template="[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n",
+        roles=("[INST]", "[/INST]"),
+        sep_style=SeparatorStyle.LLAMA2,
+        sep=" ",
+        sep2=" </s><s>",
+    )
+)
+register_conv_template(
+    Conversation(
+        name="plumeria",
         system_template="[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n",
         roles=("[INST]", "[/INST]"),
         sep_style=SeparatorStyle.LLAMA2,

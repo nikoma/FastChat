@@ -1,3 +1,6 @@
+python3 -m fastchat.serve.vllm_worker --model-names "gpt-3.5-turbo" --model-path models--nikoma777--plumeria-im-xl-0.3-awq 
+
+
 # FastChat
 | [**Demo**](https://chat.lmsys.org/) | [**Discord**](https://discord.gg/HSWAKCrnFx) | [**X**](https://x.com/lmsysorg) |
 
