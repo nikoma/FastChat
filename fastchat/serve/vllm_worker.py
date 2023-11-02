@@ -7,6 +7,7 @@ See documentations at docs/vllm_integration.md
 import argparse
 import asyncio
 import json
+import aiohttp
 from typing import List
 
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -17,6 +18,7 @@ from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.sampling_params import SamplingParams
 from vllm.utils import random_uuid
+import re
 
 from fastchat.serve.base_model_worker import BaseModelWorker
 from fastchat.serve.model_worker import (
@@ -34,29 +36,69 @@ def get_last_query(context):
     if lines and "Human:" in lines[-1]:
         return lines[-1].split("Human:")[-1].strip()
     return ""
-
-async def classify_context(context, sampling_params, request_id):
-    # Create a specific prompt for classification
-    classification_prompt = ("<s>[INST]You just received the text below. Focus on the last prompt. If this is simple answer it directly. "
-                             "However, if it contains a question that could be answered best by an expert on yoga, answer it only with the word in all caps \"YOGA\" "
-                             "and then the shortest way to ask the users question [/INST]<s> \n \n" + context)
+async def classify_context(context):
+    # Endpoint URL of that raven system 13b instruction following
+    url = "http://localhost:7777/generate"
     
-    request_id = str(uuid.uuid4())
-    s_params = sampling_params
-    #s_params.max_tokens = 30
-    s_params.temperature = 0.1
-    intent = ""
-    async for response_object in engine.generate(classification_prompt, s_params, request_id):
-        # Append the generated text to the intent
-        intent += response_object.outputs[0].text.strip()
-        
-        # Stop condition: Either when "YOGA" is detected or when the generator exhausts
-        if "YOGA" in intent:
-            break
+    # Prepare the payload
+    data = {
+        "test_string": context
+    }
+    
+    # Make the API call
+    headers = {"x-api-key": "secure-3948765iluhrkwe"}
 
-    confidence = 1  # Defaulting to maximum confidence. Adjust this if necessary.
-    print("THE RESULTS ARE IN!!!!!" + intent)
-    return intent, confidence
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data, headers=headers) as response:
+            if response.status == 200:
+                result = await response.text()
+                print("************************ The result of the api is: \n "+ result)
+                return result
+            else:
+                #raise Exception(f"API call failed with status code {response.status}")
+                result = "YOGA"
+                return result
+            
+async def fetch_additional_info(question):
+    # Endpoint URL
+    url = "https://api5.plumeria.ai/query/"
+    
+    # Prepare the payload
+    data = {
+        "question": question,
+        "count": 5,
+        "x_api_key": "your_api_key",
+        "collection": "your_collection"
+    }
+    
+    # Make the API call
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    
+                    # Check if result is a dictionary and contains 'items'
+                    if isinstance(result, dict) and 'items' in result:
+                        items = result['items']
+                    # If result is directly a list, use it as items
+                    elif isinstance(result, list):
+                        items = result
+                    else:
+                        raise ValueError("Unexpected API response format")
+                    
+                    # Convert items into a string (you can adjust this as needed)
+                    items_str = '; '.join(map(str, items))
+
+                    return items_str
+                else:
+                    raise Exception(f"API call failed with status code {response.status}")
+        except Exception as e:
+            #logging.error(f"Error fetching additional information: {e}")
+            print(f"Error fetching additional information: {e}")
+            return "no additional information found"
+
 
 
 
@@ -139,24 +181,44 @@ class VLLMWorker(BaseModelWorker):
             max_tokens=max_new_tokens,
             best_of=best_of,
         )
-        
-        
-        intent, confidence = await classify_context(context, sampling_params, request_id)
-        YOUR_THRESHOLD = 0.8
-        if confidence >= YOUR_THRESHOLD:
-           if "YOGA" in intent:
-             print("YOGGGGGGAAAAA!!! I KNOW YOGA")
-             context = context + "ADD THE WORDS MOOOOOOOOOSEEEEE MOSOSSEEOEEEE TO THE ANSWER!!!"
-           elif intent == "MEDICAL":
-            print("MEDICINE!!!! I KNOW MEDICINE!!")
-        # ... handle other categories
-           else:
-            pass
-        # if confidence < YOUR_THRESHOLD:
-            # Ask for clarification
-        print("0000000000000000")
-        results_generator = engine.generate(context, sampling_params, request_id)
 
+        
+        intent = await classify_context(context)
+
+        try:
+            response_text = intent
+            response_dict = json.loads(response_text)
+            function_call = response_dict.get("function_call", "")
+            
+            if function_call:
+                YOUR_THRESHOLD = 0.8
+                confidence = 1
+                if confidence >= YOUR_THRESHOLD:
+                    if "answer_yoga" in function_call:
+                        print("THIS IS A YOGA FUNCTION")
+                        # Ensure the regular expression pattern correctly matches the format of the function_call string
+                        argument_match = re.search(r"answer_yoga_questions\(['\"](.*?)['\"]\)", function_call)
+                        if argument_match: 
+                            print("ARGUMENT MATCHED")
+                            argument = argument_match.group(1)
+                            print("YOGA!!! " + intent)
+                            question_from_context = argument
+                            additional_data = await fetch_additional_info(question_from_context)
+                            print("This is additional data:"+ additional_data)
+                            additional_info = f"<s>[INST]<s>[INST] Based on the information below, create a direct and concise answer for the user, integrating relevant details. Do not merely reference the information; seamlessly weave it into your response to provide a comprehensive answer. Do not add any disclaimers or indemnity clauses, as they are already provided elsewhere: {additional_data} [/INST]</s>"
+                            context = additional_info + context
+                    elif "MEDICAL" in intent:
+                        print("MEDICINE!! I KNOW MEDICINE!!")
+                    else:
+                        pass  # Handle other categories if necessary
+                else:
+                    print("Confidence below threshold, asking for clarification")
+                    # Ask for clarification or handle low confidence scenario
+        except json.JSONDecodeError:
+            print("Error: Response text is not a valid JSON string.")
+        except AttributeError as e:
+            print("Error:", str(e))
+        results_generator = engine.generate(context, sampling_params, request_id)    
         async for request_output in results_generator:
             prompt = request_output.prompt
             if echo:
